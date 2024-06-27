@@ -44,17 +44,12 @@ namespace uvkc {
       + i8
       + i32
     }
-    template<DataType DT>
+    
     class DataTypeTraits {
       + storage_type: void
       + runtime_type: void
       + name: char[]
     }
-    DataTypeTraits<DataType::fp16> +-- uint16_t
-    DataTypeTraits<DataType::fp16> +-- fp16
-    DataTypeTraits<DataType::fp32> +-- float
-    DataTypeTraits<DataType::i8> +-- int8_t
-    DataTypeTraits<DataType::i32> +-- int32_t
   }
   namespace vulkan {
     class Buffer {
