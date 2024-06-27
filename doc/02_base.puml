@@ -1,0 +1,16 @@
+@startuml
+namespace uvkc {
+  class Logger {
+    + Logger(stream: std::ostream*)
+    + operator<<(content: const T&): Logger&
+  }
+  class DynamicLibrary {
+    + ~DynamicLibrary()
+    + file_name(): const std::string&
+    + GetSymbol(symbol_name: const char*): void*
+    + {static} Load(search_file_name: const char*): absl::StatusOr<std::unique_ptr<DynamicLibrary>>
+    + {static} Load(search_file_names: absl::Span<const char *const>): absl::StatusOr<std::unique_ptr<DynamicLibrary>>
+    # DynamicLibrary(file_name: std::string)
+  }
+}
+@enduml
