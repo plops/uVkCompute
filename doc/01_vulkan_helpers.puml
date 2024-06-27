@@ -1,0 +1,203 @@
+@startuml
+namespace uvkc {
+  namespace benchmark {
+    class CheckError {
+      + CheckError(file: const char*, line: int)
+      + ~CheckError()
+      + logger(): Logger&
+    }
+    class fp16 {
+      + fp16(v: uint16_t)
+      + fp16(x: float)
+      + operator=(x: const float&): fp16&
+      + operator=(x: const int&): fp16&
+      + operator+=(x: const fp16&): fp16&
+      + operator*(rhs: const fp16&): fp16
+      + operator==(rhs: const fp16&): bool
+      + operator float(): float
+      + operator uint16_t(): uint16_t
+      + fromFloat(x: float)
+      + toFloat(): float
+      + getValue(): uint16_t
+    }
+    class VulkanContext {
+      + VulkanContext(symbols: std::unique_ptr<vulkan::DynamicSymbols>, driver: std::unique_ptr<vulkan::Driver>, physical_devices: std::vector<vulkan::Driver::PhysicalDeviceInfo>, devices: std::vector<std::unique_ptr<vulkan::Device>>)
+      + symbols: std::unique_ptr<vulkan::DynamicSymbols>
+      + driver: std::unique_ptr<vulkan::Driver>
+      + physical_devices: std::vector<vulkan::Driver::PhysicalDeviceInfo>
+      + devices: std::vector<std::unique_ptr<vulkan::Device>>
+      + latency_measure: LatencyMeasure
+    }
+    VulkanContext +-- LatencyMeasure
+    class LatencyMeasure {
+      + mode: LatencyMeasureMode
+      + overhead_seconds: double
+    }
+    enum LatencyMeasureMode {
+      + kSystemSubmit
+      + kSystemDispatch
+      + kGpuTimestamp
+    }
+    enum DataType {
+      + fp16
+      + fp32
+      + i8
+      + i32
+    }
+    template<DataType DT>
+    class DataTypeTraits {
+      + storage_type: void
+      + runtime_type: void
+      + name: char[]
+    }
+    DataTypeTraits<DataType::fp16> +-- uint16_t
+    DataTypeTraits<DataType::fp16> +-- fp16
+    DataTypeTraits<DataType::fp32> +-- float
+    DataTypeTraits<DataType::i8> +-- int8_t
+    DataTypeTraits<DataType::i32> +-- int32_t
+  }
+  namespace vulkan {
+    class Buffer {
+      + Buffer(device: VkDevice, memory: VkDeviceMemory, buffer: VkBuffer, symbols: const DynamicSymbols&)
+      + ~Buffer()
+      + buffer(): VkBuffer
+      + MapMemory(offset: size_t, size: size_t): absl::StatusOr<void *>
+      + UnmapMemory()
+    }
+    class CommandBuffer {
+      + CommandBuffer(device: VkDevice, command_buffer: VkCommandBuffer, symbols: const DynamicSymbols&)
+      + ~CommandBuffer()
+      + command_buffer(): VkCommandBuffer
+      + Begin(): absl::Status
+      + End(): absl::Status
+      + Reset(): absl::Status
+      + CopyBuffer(src_buffer: const Buffer&, src_offset: size_t, dst_buffer: const Buffer&, dst_offset: size_t, length: size_t)
+      + CopyBufferToImage(src_buffer: const Buffer&, src_offset: size_t, dst_image: const Image&, image_dimensions: VkExtent3D)
+      + CopyImageToBuffer(src_image: const Image&, image_dimensions: VkExtent3D, dst_buffer: const Buffer&, dst_offset: size_t)
+      + TransitionImageLayout(image: const Image&, from_layout: VkImageLayout, to_layout: VkImageLayout): absl::Status
+      + BindPipelineAndDescriptorSets(pipeline: const Pipeline&, bound_descriptor_sets: absl::Span<const BoundDescriptorSet>)
+      + ResetQueryPool(query_pool: const TimestampQueryPool&)
+      + WriteTimestamp(query_pool: const TimestampQueryPool&, pipeline_stage: VkPipelineStageFlagBits, query_index: uint32_t)
+      + Dispatch(x: uint32_t, y: uint32_t, z: uint32_t)
+      + DispatchBarrier()
+    }
+    CommandBuffer +-- BoundDescriptorSet
+    class BoundDescriptorSet {
+      + index: uint32_t
+      + set: VkDescriptorSet
+    }
+    class DescriptorPool {
+      + DescriptorPool(pool: VkDescriptorPool, device: VkDevice, symbols: const DynamicSymbols&)
+      + ~DescriptorPool()
+      + AllocateDescriptorSets(set_layouts: absl::Span<const VkDescriptorSetLayout>): absl::StatusOr<std::unordered_map<VkDescriptorSetLayout, VkDescriptorSet>>
+    }
+    class Device {
+      + Device(device: VkDevice, physical_device: VkPhysicalDevice, queue_family_index: uint32_t, valid_timestamp_bits: uint32_t, nanoseconds_per_timestamp_value: uint32_t, command_pool: VkCommandPool, symbols: const DynamicSymbols&)
+      + ~Device()
+      + CreateBuffer(usage_flags: VkBufferUsageFlags, memory_flags: VkMemoryPropertyFlags, size_in_bytes: VkDeviceSize): absl::StatusOr<std::unique_ptr<Buffer>>
+      + CreateImage(usage_flags: VkImageUsageFlags, memory_flags: VkMemoryPropertyFlags, image_type: VkImageType, image_format: VkFormat, dimensions: VkExtent3D, image_tiling: VkImageTiling, view_type: VkImageViewType): absl::StatusOr<std::unique_ptr<Image>>
+      + CreateSampler(): absl::StatusOr<std::unique_ptr<Sampler>>
+      + CreateShaderModule(spirv_data: const uint32_t*, spirv_size: size_t): absl::StatusOr<std::unique_ptr<ShaderModule>>
+      + CreatePipeline(shader_module: const ShaderModule&, entry_point: const char*, spec_constants: absl::Span<Pipeline::SpecConstant>): absl::StatusOr<std::unique_ptr<Pipeline>>
+      + CreateDescriptorPool(shader_module: const ShaderModule&): absl::StatusOr<std::unique_ptr<DescriptorPool>>
+      + AttachBufferToDescriptor(shader_module: const ShaderModule&, layout_set_map: const std::unordered_map<VkDescriptorSetLayout, VkDescriptorSet>&, bound_buffers: absl::Span<const BoundBuffer>): absl::Status
+      + AttachImageToDescriptor(shader_module: const ShaderModule&, layout_set_map: const std::unordered_map<VkDescriptorSetLayout, VkDescriptorSet>&, bound_images: absl::Span<const BoundImage>): absl::Status
+      + AllocateCommandBuffer(): absl::StatusOr<std::unique_ptr<CommandBuffer>>
+      + ResetCommandPool(): absl::Status
+      + CreateTimestampQueryPool(query_count: uint32_t): absl::StatusOr<std::unique_ptr<TimestampQueryPool>>
+      + QueueSubmitAndWait(command_buffer: const CommandBuffer&): absl::Status
+    }
+    Device +-- BoundBuffer
+    Device +-- BoundImage
+    class BoundBuffer {
+      + buffer: const Buffer*
+      + set: uint32_t
+      + binding: uint32_t
+    }
+    class BoundImage {
+      + image: const Image*
+      + sampler: const Sampler*
+      + set: uint32_t
+      + binding: uint32_t
+    }
+    class Driver {
+      + Driver(instance: VkInstance, symbols: const DynamicSymbols&)
+      + ~Driver()
+      + EnumeratePhysicalDevices(): absl::StatusOr<std::vector<PhysicalDeviceInfo>>
+      + CreateDevice(physical_device: const PhysicalDeviceInfo&, queue_flags: VkQueueFlags): absl::StatusOr<std::unique_ptr<Device>>
+      + GetInstance(): VkInstance
+    }
+    Driver +-- PhysicalDeviceInfo
+    class PhysicalDeviceInfo {
+      + handle: VkPhysicalDevice
+      + v10_properties: VkPhysicalDeviceProperties
+      + subgroup_properties: VkPhysicalDeviceSubgroupProperties
+    }
+    class DynamicSymbols {
+      + DynamicSymbols()
+      + ~DynamicSymbols()
+      + dynamic_library(): const DynamicLibrary&
+      + LoadFromInstance(instance: VkInstance): absl::Status
+      + vkGetInstanceProcAddr: PFN_vkGetInstanceProcAddr
+      + vkGetDeviceProcAddr: PFN_vkGetDeviceProcAddr
+      + loader_library_: std::unique_ptr<DynamicLibrary>
+    }
+    class Image {
+      + Image(device: VkDevice, memory: VkDeviceMemory, image: VkImage, image_view: VkImageView, symbols: const DynamicSymbols&)
+      + ~Image()
+      + image(): VkImage
+      + image_view(): VkImageView
+    }
+    class Pipeline {
+      + Pipeline(pipeline: VkPipeline, device: VkDevice, layout: VkPipelineLayout, symbols: const DynamicSymbols&)
+      + ~Pipeline()
+      + pipeline(): VkPipeline
+      + pipeline_layout(): VkPipelineLayout
+    }
+    Pipeline +-- SpecConstant
+    class SpecConstant {
+      + id: uint32_t
+      + type: Type
+      + value: union
+      + size(): size_t
+    }
+    SpecConstant +-- Type
+    enum Type {
+      + s32
+      + u32
+      + f32
+    }
+    class PipelineLayout {
+      + set_layouts: std::vector<DescriptorSetLayout>
+    }
+    PipelineLayout +-- DescriptorSetLayout
+    class DescriptorSetLayout {
+      + set_number: uint32_t
+      + create_info: VkDescriptorSetLayoutCreateInfo
+      + bindings: std::vector<VkDescriptorSetLayoutBinding>
+    }
+    class ShaderModule {
+      + ShaderModule(module: VkShaderModule, device: VkDevice, vk_set_layouts: std::vector<VkDescriptorSetLayout>, pipeline_layout: PipelineLayout, symbols: const DynamicSymbols&)
+      + ~ShaderModule()
+      + shader_module(): VkShaderModule
+      + num_sets(): uint32_t
+      + descriptor_set_layouts(): absl::Span<const VkDescriptorSetLayout>
+      + GetDescriptorSetLayout(set: uint32_t): absl::StatusOr<VkDescriptorSetLayout>
+      + GetDescriptorSetLayoutMap(): std::unordered_map<uint32_t, VkDescriptorSetLayout>
+      + GetDescriptorSetLayoutBinding(set: uint32_t, binding: uint32_t): absl::StatusOr<const VkDescriptorSetLayoutBinding *>
+      + CalculateDescriptorPoolSize(): std::vector<VkDescriptorPoolSize>
+    }
+    class TimestampQueryPool {
+      + TimestampQueryPool(device: VkDevice, pool: VkQueryPool, nanoseconds_per_timestamp_value: uint32_t, query_count: uint32_t, symbols: const DynamicSymbols&)
+      + ~TimestampQueryPool()
+      + query_pool(): VkQueryPool
+      + query_count(): uint32_t
+      + CalculateElapsedSecondsBetween(start: int, end: int): absl::StatusOr<double>
+    }
+  }
+  class Logger {
+    + Logger(stream: std::ostream*)
+    + operator<<(content: const T&): Logger&
+  }
+}
+@enduml
